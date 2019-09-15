@@ -56,7 +56,6 @@ function drawPixel(imagedata,x,y,color) {
             imagedata.data[pixelindex+1] = color.g;
             imagedata.data[pixelindex+2] = color.b;
             imagedata.data[pixelindex+3] = color.a;
-            console.log("real");
         } else
             throw "drawpixel color is not a Color";
     } // end try
@@ -94,10 +93,14 @@ function corelogic(context) {
     var w = context.canvas.width;
     var h = context.canvas.height;
     var imagedata = context.createImageData(w,h);
+    var UL = [0,1,0];
+    var LL = [0,0,0];
+    var UR = [1,1,0];
+    var LR = [1,0,0];
 console.log(inputBoxes[0].lx);
 console.log(typeof(inputBoxes[0].lx));
 var counter = 0;
-    for(let y=0; y<=1; y=y+1/h)
+    for(let y=1; y>=0; y=y-1/h)
     {
       for(let x=0; x<=1; x=x+1/w)
       {
@@ -106,8 +109,14 @@ var counter = 0;
         var pixelY = y*h;
 
         //screen location px, py, pz
-        var px = 0 + x * 1;
-        var py = 0 + y * 1;
+        var plx = UL[0] + y * (LL[0] - UL[0]);
+        var prx = UR[0] + y * (LR[0] - UR[0]);
+        var px = plx + x * (prx - plx);
+
+        var ply = UL[1] + y * (LL[1] - UL[1]);
+        var pry = UR[1] + y * (LR[1] - UR[1]);
+        var py = ply + x * (pry - ply);
+
         var pz = 0;
 
         //eye coordinates
@@ -126,27 +135,39 @@ var counter = 0;
           var tby = (inputBoxes[b].by - eyeY)/rayY;
           var tty = (inputBoxes[b].ty - eyeY)/rayY;
           var tfz = (inputBoxes[b].fz - eyeZ)/rayZ;
-          var tbz = (inputBoxes[b].rz - eyeZ)/rayZ;
+          var trz = (inputBoxes[b].rz - eyeZ)/rayZ;
 //console.log(tlx);
           var tx0 = Math.min(tlx, tly);
         //console.log("tx0: "+tx0);
           var tx1 = Math.max(tlx, tly);
           var ty0 = Math.min(tby, tty);
           var ty1 = Math.max(tby, tty);
-          var tz0 = Math.min(tfz, tbz);
-          var tz1 = Math.max(tfz, tbz);
+          var tz0 = Math.min(tfz, trz);
+          var tz1 = Math.max(tfz, trz);
 //console.log(tx0 + ","+ty0+","+tz0);
           var t0 = Math.max(tx0,ty0, tz0);
           var t1 = Math.min(tx1,ty1, tz1);
 //console.log("t0: " + t0);
 //console.log("t1: " + t1);
+
           if(t0<=t1)
           {
             console.log("yo");
+
+            //deduce intersection points on box
+            var intrX = eyeX + t0 * rayX;
+            var intrY = eyeY + t0 * rayY;
+            var intrZ = eyeZ + t0 * rayZ;
+
+
             var c = new Color(0,0,0,0);
             c.change(inputBoxes[b]["diffuse"][0]*255,
                     inputBoxes[b]["diffuse"][1]*255,
                     inputBoxes[b]["diffuse"][2]*255,255);
+
+
+
+
             drawPixel(imagedata, pixelX, pixelY, c);
           }
         //console.log(counter++);
