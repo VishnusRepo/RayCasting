@@ -86,6 +86,38 @@ function getInputBoxes() {
         return JSON.parse(httpReq.response);
 } // end get input boxes
 
+function normalize(v)
+{
+  var base = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+  var normalized = [v[0]/base, v[1]/base, v[2]/base];
+  return normalized;
+}
+
+function dotproduct(A, B)
+{
+  var ret = 0;
+  for(var i=0;i<A.length;i++)
+  {
+    ret+=A[i]*B[i];
+  }
+  return ret;
+}
+
+function smallest(arr)
+{
+  var minIndex = -1;
+  var min = 1000000000;
+  for(var i=0;i<arr.length;i++)
+  {
+    if(arr[i]<min)
+    {
+      min = arr[i];
+      minIndex = i;
+    }
+  }
+  //console.log("smallest ret: " + minIndex);
+  return minIndex;
+}
 
 // put random points in the boxes from the class github
 function corelogic(context) {
@@ -97,9 +129,11 @@ function corelogic(context) {
     var LL = [0,0,0];
     var UR = [1,1,0];
     var LR = [1,0,0];
-console.log(inputBoxes[0].lx);
-console.log(typeof(inputBoxes[0].lx));
-var counter = 0;
+    var light = [-0.5, 1.5, -0.5];
+    var lightColor = [1, 1, 1];
+//console.log(inputBoxes[0].lx);
+//console.log(typeof(inputBoxes[0].lx));
+//var counter = 0;
     for(let y=1; y>=0; y=y-1/h)
     {
       for(let x=0; x<=1; x=x+1/w)
@@ -117,7 +151,10 @@ var counter = 0;
         var pry = UR[1] + y * (LR[1] - UR[1]);
         var py = ply + x * (pry - ply);
 
-        var pz = 0;
+        var plz = UL[2] + y * (LL[2] - UL[2]);
+        var prz = UR[2] + y * (LR[2] - UR[2]);
+        var pz = plz + x * (prz - plz);
+        //var pz = 0;
 
         //eye coordinates
         var eyeX = 0.5;
@@ -128,18 +165,23 @@ var counter = 0;
         var rayX = px - eyeX;
         var rayY = py - eyeY;
         var rayZ = pz - eyeZ;
+
+        var objdists = [];
+        var colors = [];
+
         for(var b=0;b<inputBoxes.length;b++)
         {
+			/*
           var tlx = (inputBoxes[b].lx - eyeX)/rayX;
-          var tly = (inputBoxes[b].rx - eyeX)/rayX;
+          var trx = (inputBoxes[b].rx - eyeX)/rayX;
           var tby = (inputBoxes[b].by - eyeY)/rayY;
           var tty = (inputBoxes[b].ty - eyeY)/rayY;
           var tfz = (inputBoxes[b].fz - eyeZ)/rayZ;
           var trz = (inputBoxes[b].rz - eyeZ)/rayZ;
 //console.log(tlx);
-          var tx0 = Math.min(tlx, tly);
+          var tx0 = Math.min(tlx, trx);
         //console.log("tx0: "+tx0);
-          var tx1 = Math.max(tlx, tly);
+          var tx1 = Math.max(tlx, trx);
           var ty0 = Math.min(tby, tty);
           var ty1 = Math.max(tby, tty);
           var tz0 = Math.min(tfz, trz);
@@ -147,37 +189,167 @@ var counter = 0;
 //console.log(tx0 + ","+ty0+","+tz0);
           var t0 = Math.max(tx0,ty0, tz0);
           var t1 = Math.min(tx1,ty1, tz1);
+		  */
 //console.log("t0: " + t0);
 //console.log("t1: " + t1);
+			var t0 = Number.MIN_VALUE;
+			var t1 = Number.MAX_VALUE;
+			if (rayX != 0)
+			{
+				var tlx = (inputBoxes[b].lx - eyeX)/rayX;
+				var trx = (inputBoxes[b].rx - eyeX)/rayX;
+				var tx0 = Math.min(tlx, trx);
+				var tx1 = Math.max(tlx, trx);
+				t0 = Math.max(t0, tx0);
+				t1 = Math.min(t1, tx1);
+			}
+			if (rayY != 0)
+			{
+				var tby = (inputBoxes[b].by - eyeY)/rayY;
+				var tty = (inputBoxes[b].ty - eyeY)/rayY;
+				var ty0 = Math.min(tby, tty);
+				var ty1 = Math.max(tby, tty);
+				t0 = Math.max(t0, ty0);
+				t1 = Math.min(t1, ty1);
+			}
+			if (rayZ != 0)
+			{
+				var tfz = (inputBoxes[b].fz - eyeZ)/rayZ;
+				var trz = (inputBoxes[b].rz - eyeZ)/rayZ;
+				var tz0 = Math.min(tfz, trz);
+				var tz1 = Math.max(tfz, trz);
+				t0 = Math.max(t0, tz0);
+				t1 = Math.min(t1, tz1);
+			}
 
-          if(t0<=t1)
+          if(t0<=t1 && rayX!=0 && rayY!=0 && rayZ!=0)
           {
-            console.log("yo");
+            //console.log("yo");
 
             //deduce intersection points on box
             var intrX = eyeX + t0 * rayX;
             var intrY = eyeY + t0 * rayY;
             var intrZ = eyeZ + t0 * rayZ;
 
+            var N = [0,0,0];
+            //console.log("Coordinates: " + intrX + "; " + intrY + "; " + intrZ);
+            //identify normal vector to point (intrX, intrY, intrZ)
+            var close = smallest([Math.abs(inputBoxes[b].lx-intrX), Math.abs(inputBoxes[b].rx-intrX),
+            Math.abs(inputBoxes[b].by-intrY), Math.abs(inputBoxes[b].ty-intrY),
+              Math.abs(inputBoxes[b].fz-intrZ), Math.abs(inputBoxes[b].rz-intrZ)]);
+
+            if(close==0)
+            {
+              N[0] = -1 * inputBoxes[b].lx;
+              //console.log("lx");
+            }
+            else if(close==1)
+            {
+              N[0] = inputBoxes[b].rx;
+              //console.log("intrX: "+intrX);
+              //console.log(inputBoxes[b].rx);
+              //console.log("rx");
+            }
+            else if(close==2)
+            {
+              N[1] = -1 * inputBoxes[b].by;
+              //console.log("by");
+            }
+            else if(close==3)
+            {
+              N[1] = inputBoxes[b].ty;
+              //console.log("ty");
+            }
+            else if(close==4)
+            {
+              N[2] = -1 * inputBoxes[b].fz;
+              //console.log("fz");
+            }
+            else
+            {
+              N[2] = inputBoxes[b].rz;
+              //console.log("rz");
+            }
+
+            N = normalize(N);
+
+            //eye vector
+            var V = normalize([eyeX-intrX, eyeY-intrY, eyeZ-intrZ]);
+
+            //light vector
+            var L = normalize([light[0]-intrX, light[1]-intrY, light[2]-intrZ]);
+
+            //Half vector
+            var H = normalize([V[0]+L[0], V[1]+L[1], V[2]+L[2]]);
 
             var c = new Color(0,0,0,0);
-            c.change(inputBoxes[b]["diffuse"][0]*255,
+/*Part 1            c.change(inputBoxes[b]["diffuse"][0]*255,
                     inputBoxes[b]["diffuse"][1]*255,
                     inputBoxes[b]["diffuse"][2]*255,255);
+*/
+
+            var red = inputBoxes[b]["ambient"][0]*lightColor[0]
+            + inputBoxes[b]["diffuse"][0]*lightColor[0]*dotproduct(N,L)
+            + inputBoxes[b]["specular"][0]*lightColor[0]*Math.pow(dotproduct(N,H), inputBoxes[b]["n"]);
+
+            if (red<0) red = 0;
+            else if (red>1) red = 1;
+
+            var green = inputBoxes[b]["ambient"][1]*lightColor[1]
+            + inputBoxes[b]["diffuse"][1]*lightColor[1]*dotproduct(N,L)
+            + inputBoxes[b]["specular"][1]*lightColor[1]*Math.pow(dotproduct(N,H), inputBoxes[b]["n"]);
+
+            if (green<0) green = 0;
+            else if (green>1) green = 1;
+
+            var blue = inputBoxes[b]["ambient"][2]*lightColor[2]
+            + inputBoxes[b]["diffuse"][2]*lightColor[2]*dotproduct(N,L)
+            + inputBoxes[b]["specular"][2]*lightColor[2]*Math.pow(dotproduct(N,H), inputBoxes[b]["n"]);
+
+            if (blue<0) blue = 0;
+            else if (blue>1) blue = 1;
+
+            //console.log("red: " + red + ", green: " + green + ", blue: " + blue);
+
+            red = Math.round(red*255);
+            green = Math.round(green*255);
+            blue = Math.round(blue*255);
 
 
-
-
-            drawPixel(imagedata, pixelX, pixelY, c);
+            //c.change(red*255, green*255, blue*255, 255);
+            c.change(red, green, blue, 255);
+            objdists.push(t0);
+            colors.push(c);
+//            console.log(objs[t0]);
+            //drawPixel(imagedata, pixelX, pixelY, c);
           }
+/*          else {//Color pixel black
+            var c = new Color(0,0,0,0);
+            c.change(0,0,0,255);
+            drawPixel(imagedata, pixelX, pixelY, c);
+          }*/
         //console.log(counter++);
         }
+        //chose closest object Color
+        var closestDist = 1000000000;
+        var pickedColor = new Color(0, 0, 0, 0);
+        //console.log(objs);
+        for(var i=0; i<objdists.length; i++)
+        {
+          if (closestDist > objdists[i])
+          {
+            closestDist = objdists[i];
+            pickedColor = colors[i];
+          }
+        }
+        drawPixel(imagedata, pixelX, pixelY, pickedColor);
       }
     }
     context.putImageData(imagedata, 0, 0);
 }
 
 function main() {
+  document.body.style.backgroundColor = "black";
 
     // Get the canvas and context
     var canvas = document.getElementById("viewport");
